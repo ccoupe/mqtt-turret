@@ -1,0 +1,16 @@
+{
+  "mqtt_server_ip": "192.168.1.7",
+  "mqtt_port": 1883,
+  "mqtt_client_name": "turret_back",
+  "homie_device": "turret_back",
+  "homie_name": "Pi 0w Laser Turrets",
+  "turrets": [
+    {
+        "hw": true,
+        "laser_pin" : 17,
+        "pan_pin": 0,
+        "tilt_pin": 1,
+	"delay": 0.25
+    }
+  ]
+}
