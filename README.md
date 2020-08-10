@@ -35,4 +35,6 @@ Calibate Servos to get full 180 degree movement.
 ## Future - V2
 Shape movements - circle, diamond, ...
 Better use of PCA9685 - Singleton class to init.
+Multiple Turrets in Different Processes ? The chip allows for 7 more pairs. 
+  Related to Singleton PCA class. It's possible the AdaFruit can handle it?
 

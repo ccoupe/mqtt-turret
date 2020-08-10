@@ -19,6 +19,7 @@ import logging.handlers
 import atexit
 
 import RPi.GPIO as GPIO
+from adafruit_servokit import ServoKit
 
 settings = None
 hmqtt = None
@@ -29,10 +30,10 @@ turrets = []    # list of Turret Objects
 running = False
 
 # MQTT callback, Mult-Threaded re-entrant
-def turretCB(turreti, jsonstr):
-  global hmqtt, applog, tur_lock, running
+def turretCB(idx, jsonstr):
+  global applog, running
   #tur_lock.acquire()    
-  t = turrets[turreti - 1]
+  t = turrets[idx]
   print(t)
   if jsonstr == 'stop' and t.stopped == False:
     # async kill
@@ -51,56 +52,61 @@ def turretCB(turreti, jsonstr):
       hmqtt.update_power(p)
     else:
       applog.warn(f'bad power: {pwr}')
-  pause = args.get('pause', 0.50)
+  # build internal args dict with defaults
+  margs = {}
+  margs['method'] = Move.direct
+  margs['pause'] = args.get('pause', t.dfltp)
+  if args.get('steps', None):
+    margs['method'] = Move.steps
+    margs['increment'] = args['steps']
+  if args.get('time', None):
+    margs['method'] = Move.time
+    margs['increment'] = args['time']
+  tilt = args.get('tilt', None)
   pan = args.get('pan', None)
+  exe = args.get('exec', None)
   if pan:
-    t.pan_to(pan)
-    if pause:
-      time.sleep(pause)
+    t.pan_to(pan, margs)
   tilt = args.get('tilt', None)
   if tilt:
     t.tilt_to(tilt)
-    if pause:
-      time.sleep(pause)
-
-  exec = args.get('exec', None)
-  if exec:
+  if exe:
     cnt = args.get('count', 1)
-    if exec == 1:
-      square_zig(t, cnt, pause)
-    elif exec == 2:
-      circle_zig(t, cnt, pause)
-    elif exec == 3:
-      diamond_zig(t, cnt, pause)
-    elif exec == 4:
-      cross_zig(t, cnt, pause)
-    elif exec == 5
-      horizontal_zig(t, cnt, pause)
-    elif exec == 6:
-      vertical_zig(t, cnt, pause)
-    elif exec == 7:
-      random_zig(t, cnt, pause)
+    if exe == 1:
+      square_zig(t, cnt, margs)
+    elif exe == 2:
+      circle_zig(t, cnt, margs)
+    elif exe == 3:
+      diamond_zig(t, cnt, margs)
+    elif exe == 4:
+      cross_zig(t, cnt, margs)
+    elif exe == 5:
+      horizontal_zig(t, cnt, margs)
+    elif exe == 6:
+      vertical_zig(t, cnt, margs)
+    elif exe == 7:
+      random_zig(t, cnt, margs)
     else:
       app.warn(f'unknown exec pattern: {exec}')
       
-  hmqtt.update_angles(t.pan_angle, t.tilt_angle)
-  hmqtt.update_status('OK')
+  hmqtt.update_angles(idx, t.pan_angle, t.tilt_angle)
+  hmqtt.update_status(idx, 'OK')
   t.stop()
   #tur_lock.release()
   
-def square_zig(t, cnt, pause):
+def square_zig(t, cnt, opts):
+  print(opts)
   # pan range
-  xmin = t.minx + 10
-  xmax = t.maxx - 10
-  pan_range = xmax - xmin
+  xmin = t.minx # + 10
+  xmax = t.maxx # - 10
   # tilt range
-  ymin = t.miny + 20
-  ymax = t.maxy - 20
+  ymin = t.miny # + 20
+  ymax = t.maxy # - 20
 
   # start at lower,left
   t.laser(False)
-  t.pan_to(90)
-  t.tilt_to(90)
+  t.pan_to(90, opts)
+  t.tilt_to(90, opts)
   t.laser(True)
   time.sleep(0.2)
   for i in range(0, cnt):
@@ -108,34 +114,78 @@ def square_zig(t, cnt, pause):
       applog.info('exec square canceled')
       break
     # to upper, left
-    t.tilt_to(ymax, {'pause': pause})
+    t.tilt_to(ymax, opts)
     # to upper, right
-    t.pan_to(xmax, {'pause': pause})
+    t.pan_to(xmax, opts)
     # to lower, right
-    t.tilt_to(ymin, {'pause': pause})
+    t.tilt_to(ymin, opts)
     # to lower, left
-    t.pan_to(xmin, {'pause': pause})
-  t.pan_to(90)
-  t.tilt_to(90)
-  time.sleep(0.5)
+    t.pan_to(xmin, opts)
+  t.pan_to(90, opts)
+  t.tilt_to(90, opts)
   t.laser(False)
     
-def circle_zig(t, cnt, pause):
+def circle_zig(t, cnt, opts):
   pass
   
-def diamond_zig(t, cnt, pause):
+def diamond_zig(t, cnt, opts):
   pass
   
-def cross_zig(t, cnt, pause):
+def cross_zig(t, cnt, opts):
   pass
   
-def horizontal_zig(t, cnt, pause):
-  pass
+def horizontal_zig(t, cnt, opts):
+  # pan range
+  xmin = t.minx # + 10
+  xmax = t.maxx # - 10
+  # tilt range
+  ymin = t.miny # + 20
+  ymax = t.maxy # - 20
   
-def vertical_zig(t, cnt, pause):
-  pass
   
-def random_zig(t, cnt, pause):
+def vertical_zig(t, cnt, opts):
+  print(f' inopts: {opts}')
+  # pan range
+  xmin = t.minx
+  xmax = t.maxx
+  xrng = xmax - xmin
+  # tilt range
+  ymin = t.miny
+  ymax = t.maxy
+  yrng = ymax - ymin
+  steps = int(opts.get('increment', 4))
+  # for zigzags, steps is the number of lines 
+  opts.pop('increment')
+  # divide total time by steps (lines to draw)
+  if opts['method'] == Move.time:
+    opts['increment'] /=  steps
+  if opts['method'] == Move.steps:
+      opts['method'] = Move.direct
+  print(f'outopts: {opts}')
+  for i in range(0, cnt):
+    x = xmin
+    y = ymin
+    t.pan_to(x)
+    t.tilt_to(y)
+    t.laser(True)
+    sdir = 'up'
+    xstepd = int(xrng / steps)
+    for s in range(0, steps):
+      x += xstepd
+      if sdir == 'up':
+        print(f'step+ {s} to {x} {ymax}')
+        t.line_to(x, ymax, opts)
+        sdir = 'down'
+      elif sdir == 'down':
+        print(f'step- {s} to {x} {ymin}')
+        t.line_to(x, ymin, opts)
+        sdir = 'up'        
+    t.laser(False)
+    t.pan_to(xmin, opts)
+    t.tilt_to(ymin, opts)
+    
+  
+def random_zig(t, cnt, opts):
   pass
   
 def cleanup():
@@ -174,12 +224,25 @@ def main():
 
   settings = Settings(args["conf"], 
                       applog)
-  # init turrets from settings
+  # init turrets from settings. Do any of the turret
+  # use PCA9685, if so, we init that device here.
+  init_pca = False
+  kit = None
   for t in settings.turrets:
-     turrets.append(Turret(t, applog))
-
-  hmqtt = Homie_MQTT(settings, 
-                    turretCB)
+    if t.get('laser_pin', False):
+      init_pca = True
+  if init_pca:
+    applog.info('initializing PCA9685')
+    kit = ServoKit(channels=16)
+    
+  # init mqtt server connection
+  hmqtt = Homie_MQTT(settings, turretCB)
+  
+  for i in range(0, len(settings.turrets)):
+     turrets.append(Turret(settings.turrets[i], kit, applog))
+   
+  #hmqtt = Homie_MQTT(settings, 
+  #                  turretCB)
                     
   settings.print()
   
