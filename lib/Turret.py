@@ -216,42 +216,102 @@ class Turret:
       self.servoTilt.stop()
     GPIO.output(self.laserp, GPIO.LOW)
     
+  def check_x(self, x):
+    if x > self.maxx:
+      return self.maxx
+    if x < self.minx:
+      return self.minx
+    return x
+    
+  def check_y(self, y):
+    if y > self.maxy:
+      return self.maxy
+    if y < self.miny:
+      return self.miny
+    return y
+
+    
   # draw like methods
   def line_to(self, x, y, opts):
     meth = opts.get('method', Move.direct)
     pause = opts.get('pause',self.dfltp)
     incr = opts.get('increment', 10)
-    if meth == Move.time:
-      incr = opts.get('deadline',1)
     if self.state == State.stopping:
       return
     ydist = abs(y - self.tilt_angle)
     xdist = abs(x - self.pan_angle)
     slope = (self.tilt_angle - y) / (self.pan_angle - x)
-    print(f'line_to from {self.pan_angle},{self.tilt_angle} to {x},{y} slope {slope} with {xdist}, {ydist}')
     xbegp = self.pan_angle
     ybegp = self.tilt_angle
+    #print(f'Line_To: from {xbegp},{ybegp} to {x},{y} slope {slope} with {xdist}, {ydist}')
     xp = xbegp
     yp = ybegp
     servoP = self.kit.servo[self.panp]
     servoT = self.kit.servo[self.tiltp]
-    for i in range(0, xdist):
-      xp = xbegp + i
-      xp = min(xp, self.maxx)
-      yp = ybegp + int(i * slope)
-      yp = min(yp, self.maxy)
-      print(i, xp, yp, i*slope)
-      #self.pan_to(xp , args)
-      #self.tilt_to(yp, args)
-      self.move_to(servoP, self._get_pan, self._set_pan, xp, pause, meth, incr)
-      self.move_to(servoT, self._get_tilt, self._set_tilt, yp, pause, meth, incr)
-    # issue final move
-    print('f ', x, y)
-    #self.pan_to(x, opts)
-    #self.tilt_to(y, opts)
-    self.move_to(servoP, self._get_pan, self._set_pan, x, pause, meth, incr)
-    self.move_to(servoT, self._get_tilt, self._set_tilt, y, pause, meth, incr)
+    if meth == Move.time:
+      mpause = (incr / xdist) / 2
+      incr = 1
+    else:
+      mpause = pause / incr
+    # which quadrant to draw towards
+    if xbegp <= x:
+      # towards right half, increment x
+      if slope >= 0:
+        # upper right, increment y
+        for i in range(xbegp, x, incr):
+          xp = i
+          yp = ybegp + int((i-xbegp) * slope)
+          #print(f'UR: {i} {xp} {yp} {i*slope} {mpause}')
+          xp = self.check_x(xp)
+          yp = self.check_y(yp)
+          self.move_it(servoP, xp, mpause)
+          self.move_it(servoT, yp, mpause)
+          self.pan_angle = xp
+          self.tilt_angle = yp
+      else:
+        # lower right, decrement y
+        for i in range(xbegp, x, incr):
+          xp = i
+          yp = ybegp + int((i-xbegp) * slope)
+          xp = self.check_x(xp)
+          yp = self.check_y(yp)
+          #print(f'LR: {i} {xp} {yp} {i*slope} {mpause} {ybegp}')
+          self.move_it(servoP, xp, mpause)
+          self.move_it(servoT, yp, mpause)
+          self.pan_angle = xp
+          self.tilt_angle = yp
+    else:
+      # towards left half - decrement x
+      if ybegp <= y:
+        # to upper left, increment y
+        for i in range(0, xbegp - x, incr):
+          xp = xbegp - i
+          yp =  ybegp + int(i * abs(slope))
+          xp = self.check_x(xp)
+          yp = self.check_y(yp)
+          #print(f'UL: {i} {xp} {yp} {i*slope} {mpause}')
+          self.move_it(servoP, xp, mpause)
+          self.move_it(servoT, yp, mpause)
+          self.pan_angle = xp
+          self.tilt_angle = yp
+      else:
+        # to lower left, decrement y
+        for i in range(0, xbegp -x, incr):
+          xp = xbegp - i
+          yp =  ybegp - int(i * abs(slope))
+          xp = self.check_x(xp)
+          yp = self.check_y(yp)
+          #print(f'LL: {i} {xp} {yp} {i*slope} {mpause}')
+          self.move_it(servoP, xp, mpause)
+          self.move_it(servoT, yp, mpause)
+          self.pan_angle = xp
+          self.tilt_angle = yp
 
+    #print(f'  : f  {x} {y}')
+    self.move_it(servoP, x, mpause)
+    self.move_it(servoT, y, mpause)
+    self.pan_angle = x
+    self.tilt_angle = y
 
 if __name__ == '__main__':
   # Pins are GPIO, aka BCM. Not board.

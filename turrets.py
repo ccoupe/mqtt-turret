@@ -34,7 +34,7 @@ def turretCB(idx, jsonstr):
   global applog, running
   #tur_lock.acquire()    
   t = turrets[idx]
-  print(t)
+  #print(t)
   if jsonstr == 'stop' and t.stopped == False:
     # async kill
     t.stop()
@@ -81,8 +81,10 @@ def turretCB(idx, jsonstr):
     elif exe == 4:
       cross_zig(t, cnt, margs)
     elif exe == 5:
+      margs['lines'] = args.get('lines', 4)
       horizontal_zig(t, cnt, margs)
     elif exe == 6:
+      margs['lines'] = args.get('lines', 4)
       vertical_zig(t, cnt, margs)
     elif exe == 7:
       random_zig(t, cnt, margs)
@@ -135,16 +137,7 @@ def cross_zig(t, cnt, opts):
   pass
   
 def horizontal_zig(t, cnt, opts):
-  # pan range
-  xmin = t.minx # + 10
-  xmax = t.maxx # - 10
-  # tilt range
-  ymin = t.miny # + 20
-  ymax = t.maxy # - 20
-  
-  
-def vertical_zig(t, cnt, opts):
-  print(f' inopts: {opts}')
+  #print(f' inopts: {opts}')
   # pan range
   xmin = t.minx
   xmax = t.maxx
@@ -153,36 +146,121 @@ def vertical_zig(t, cnt, opts):
   ymin = t.miny
   ymax = t.maxy
   yrng = ymax - ymin
-  steps = int(opts.get('increment', 4))
-  # for zigzags, steps is the number of lines 
-  opts.pop('increment')
-  # divide total time by steps (lines to draw)
+  lines = int(opts.get('lines', 4))
+  # divide total time by lines 
   if opts['method'] == Move.time:
-    opts['increment'] /=  steps
+    opts['increment'] /=  lines
   if opts['method'] == Move.steps:
       opts['method'] = Move.direct
-  print(f'outopts: {opts}')
+  #print(f'outopts: {opts}')
   for i in range(0, cnt):
-    x = xmin
-    y = ymin
-    t.pan_to(x)
-    t.tilt_to(y)
-    t.laser(True)
-    sdir = 'up'
-    xstepd = int(xrng / steps)
-    for s in range(0, steps):
-      x += xstepd
-      if sdir == 'up':
-        print(f'step+ {s} to {x} {ymax}')
-        t.line_to(x, ymax, opts)
-        sdir = 'down'
-      elif sdir == 'down':
-        print(f'step- {s} to {x} {ymin}')
-        t.line_to(x, ymin, opts)
-        sdir = 'up'        
-    t.laser(False)
-    t.pan_to(xmin, opts)
-    t.tilt_to(ymin, opts)
+    #print(f"Horizontal {i}")
+    if i % 2 == 0:
+      x = xmin
+      y = ymin
+      t.pan_to(x)
+      t.tilt_to(y)
+      t.laser(True)
+      sdir = 'right'
+      ystepd = int(yrng / lines)
+      for s in range(0, lines):
+        y += ystepd
+        if sdir == 'right':
+          #print(f'step+ {s} to {xmax} {y} by {ystepd}')
+          t.line_to(xmax, y, opts)
+          sdir = 'left'
+        elif sdir == 'left':
+          #print(f'step- {s} to {xmin} {y} by {ystepd}')
+          t.line_to(xmin, y, opts)
+          sdir = 'right'       
+      t.laser(False)
+    else:
+      #print('reverse horizontal')
+      x = xmax
+      y = ymax
+      t.pan_to(x)
+      t.tilt_to(y)
+      t.laser(True)
+      sdir = 'left'
+      ystepd = int(yrng / lines)
+      for s in range(0, lines):
+        y -= ystepd
+        if sdir == 'left':
+          #print(f'step- {s} to {xmin} {y} by {ystepd}')
+          t.line_to(xmin, y, opts)
+          sdir = 'right'
+        elif sdir == 'right':
+          #print(f'step+ {s} to {xmax} {y} by {ystepd}')
+          t.line_to(xmax, y, opts)
+          sdir = 'left'       
+      t.laser(False)
+  opts['pause'] = 0.1
+  t.line_to(90, 90, opts)
+  #t.pan_to(90, opts)
+  #t.tilt_to(90, opts)
+  
+  
+def vertical_zig(t, cnt, opts):
+  #print(f' inopts: {opts}')
+  # pan range
+  xmin = t.minx
+  xmax = t.maxx
+  xrng = xmax - xmin
+  # tilt range
+  ymin = t.miny
+  ymax = t.maxy
+  yrng = ymax - ymin
+  lines = int(opts.get('lines', 4))
+  # divide total time by lines 
+  if opts['method'] == Move.time:
+    opts['increment'] /=  lines
+  if opts['method'] == Move.steps:
+      opts['method'] = Move.direct
+  #print(f'outopts: {opts}')
+  for i in range(0, cnt):
+    if i & 1 == 0:
+      x = xmin
+      y = ymin
+      t.pan_to(x)
+      t.tilt_to(y)
+      t.laser(True)
+      sdir = 'up'
+      xstepd = int(xrng / lines)
+      for s in range(0, lines):
+        x += xstepd
+        if sdir == 'up':
+          #print(f'step+ {s} to {x} {ymax}')
+          t.line_to(x, ymax, opts)
+          sdir = 'down'
+        elif sdir == 'down':
+          #print(f'step- {s} to {x} {ymin}')
+          t.line_to(x, ymin, opts)
+          sdir = 'up'       
+      t.laser(False)
+    else:
+      #print('starting vert reverse')
+      x = xmax
+      y = ymax
+      t.pan_to(x)
+      t.tilt_to(y)
+      t.laser(True)
+      sdir = 'down'
+      xstepd = int(xrng / lines)
+      for s in range(0, lines):
+        x -= xstepd
+        if sdir == 'up':
+          #print(f'step+ {s} to {x} {ymax}')
+          t.line_to(x, ymax, opts)
+          sdir = 'down'
+        elif sdir == 'down':
+          #print(f'step- {s} to {x} {ymin}')
+          t.line_to(x, ymin, opts)
+          sdir = 'up'       
+      t.laser(False)
+  opts['pause'] = 0.1
+  t.line_to(90, 90, opts)
+  #t.pan_to(90, opts)
+  #t.tilt_to(90, opts)
     
   
 def random_zig(t, cnt, opts):
