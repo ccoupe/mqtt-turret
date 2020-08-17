@@ -32,16 +32,22 @@ class Turret:
     self.panp = dic['pan_pin']    # or PCA9685 channel num
     self.tiltp = dic['tilt_pin']  # or PCA9685 channel num
     self.dfltp = dic.get('delay',0.25)
-    self.pan_angle = 0
-    self.tilt_angle = 0
-    self.power = False
-    self.state = State.stopped
     # max and min depend on individual servos, mounting scheme and where the
     # thing is deployed.  These defaults work for mine.
     self.minx = dic.get('pan_min', 30)
     self.maxx = dic.get('pan_max', 150)
     self.miny = dic.get('tilt_min', 50)
     self.maxy = dic.get('tilt_max',180)
+    # The caller can play a game by set the above to a new viewport 
+    # and restoring the defaults when done.
+    self.dflt_minx = self.minx
+    self.dflt_maxx = self.maxx
+    self.dflt_maxy = self.maxy
+    self.dflt_miny = self.miny
+    self.pan_angle = 0
+    self.tilt_angle = 0
+    self.power = False
+    self.state = State.stopped
     GPIO.setup(self.laserp,GPIO.OUT)
     if self.pca is None:
       # Use less precise software pwm
@@ -232,6 +238,18 @@ class Turret:
 
     
   # draw like methods
+  
+  def point_to(self, x, y, opts={}):
+    mpause = opts.get('pause', .05)
+    #print(f'Pt_To: {x},{y}')
+    if x != self.pan_angle:
+      self.move_it(self.kit.servo[self.panp], self.check_x(x), mpause)
+    if y != self.tilt_angle:
+      self.move_it(self.kit.servo[self.tiltp], self.check_y(y), mpause)
+    self.pan_angle = x
+    self.tilt_angle = y
+
+
   def line_to(self, x, y, opts):
     meth = opts.get('method', Move.direct)
     pause = opts.get('pause',self.dfltp)
@@ -240,7 +258,10 @@ class Turret:
       return
     ydist = abs(y - self.tilt_angle)
     xdist = abs(x - self.pan_angle)
-    slope = (self.tilt_angle - y) / (self.pan_angle - x)
+    if self.pan_angle == x:
+      slope = 0
+    else:
+      slope = (self.tilt_angle - y) / (self.pan_angle - x)
     xbegp = self.pan_angle
     ybegp = self.tilt_angle
     #print(f'Line_To: from {xbegp},{ybegp} to {x},{y} slope {slope} with {xdist}, {ydist}')
@@ -249,7 +270,10 @@ class Turret:
     servoP = self.kit.servo[self.panp]
     servoT = self.kit.servo[self.tiltp]
     if meth == Move.time:
-      mpause = (incr / xdist) / 2
+      if xdist != 0:
+        mpause = (incr / xdist) / 2
+      else:
+        mpause = incr / 2
       incr = 1
     else:
       mpause = pause / incr

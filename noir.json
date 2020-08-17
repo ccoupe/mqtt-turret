@@ -13,12 +13,12 @@
 	"delay": 0.25,
 	"pan_min": 0,
 	"pan_max": 180,
-	"tilt_min": 90,
+	"tilt_min": 70,
 	"tilt_max": 180
     },
     {
         "hw": true,
-        "laser_pin" : 26,
+        "laser_pin" : 27,
         "pan_pin": 14,
         "tilt_pin": 15,
 	"delay": 0.25,

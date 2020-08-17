@@ -1,0 +1,11 @@
+[Unit]
+Description=MQTT Laser Turrets
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/pi/Projects/iot/turret/mqttlasers.sh
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

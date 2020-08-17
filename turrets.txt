@@ -1,0 +1,84 @@
+turrets.txt
+done: assemble/fit servos, diodes
+   -- horns need fitting.
+   -- dremel out rafters
+   -- hot glue for horn <-> mount(s)
+2. CAD mods and reprint:
+3. Larger picture of dual turrets, pi and electronics board mounting
+      and cover. Where is it placed in re: Trumpy Bear. shelf? Rear corner?
+      Do I want sh1106 and HR504 included - I Think I do for pi0 in the corner.
+   -- One turret pair at TB (pi4?) one in back - pi0
+    
+done: wire to pi0
+   Solder header to pi0.
+   Pin    GPIO  
+   2      GPIO 2  Yellow  SDA         sh1106
+   3      GPIO 3  Orange  SCL         sh1106
+   11     GPIO 17 White   transister - Laser diode 'fire' when 'on'
+   13     GPIO 27 Orange  pan servo - software pcm
+   15     GPIO 22 Gray    tilt servo - softwar pcm
+   will power from separate usb port from Pi.
+   
+   Tilt 45 is level, 0 as far down as possible. 135 is straight up
+   Pan 90 is center 0 far left, 180 far right
+   
+done: Diode on/off not as simple as I hoped.
+   NPN 2N2222 - emitter to gnd. 1Kohm base to signal (3v). Collector to neg side
+   of laser diode.  Diode Plus to 5v.
+   https://learn.sparkfun.com/tutorials/transistors/applications-i-switches
+   https://www.pinterest.ca/pin/176625616614992442/
+   https://electronics.stackexchange.com/questions/309839/attempt-to-use-2n2222-as-a-switch-but-it-seems-to-work-below-5v-all-the-way-do
+done: python test code. From E.C. in ~/Projects/iot/turrents
+
+done: PCA9675 for servos. Needs AdaFruit lib and blinka compat layer.
+6. power issues, packaging
+   need a small pcb with transistor+resistor + 5v + gnd 
+    add HR504 voltage divider? 2nd Laser? 
+
+done: MQTT topics/payloads - coding
+   done: homie/turret_back/turret_1/pan|tilt|power|control
+        control/set = {'power': nn, 'pan': deg, 'tilt': deg, 'exec': n}
+      [ homie/turret_back/turret_2/pan|tilt|power|control]
+      [ homie/turret_back/autoranger/distance|mode]
+      [ homie/turret_back/display/cmd|text|mode
+    done: Settings/json 
+      homie mqtt stuff.
+      PCA9675 port number or
+      pi pin number for diode, pan, tilt
+      turrets should be json list of turret. turret is a dict
+    done: Class for Turrent, object for each. 
+    
+Square: MQTT control/set Payload for square (exec)
+  {"exec": 1, "count": <n>, ["steps": <n> | "time": <sec>], "pause": <sec>}
+    one of 'steps' or 'time'. 
+    
+Vsig, Hzig: HMQTT control/set Payload for vertical zigzag (exec = 6) or horizontal (exec = 5)
+  {"exec": vzig, "count": <n>, "lines": <n>, ["steps": <n> | "time": <sec>]
+  , "pause": <sec>}
+      time is requested total for all lines. 
+      pause is additional time at end of line. 
+      
+Circle: MQTT control/set Payload for circle
+  '{"exec": "circle", "count": 1, "radius": 40, "time": 2}'
+  '{"exec": "circle", "count": 2, "radius": 55, "steps": 30, "pause": 0.2}'
+  
+Crosshairs
+  '{"exec": "crosshairs", "count": 2, "length": 30}'
+     steps, time, pause are valid but a little funny. Time is OK.
+     
+Diamond
+  '{"exec": "diamond", "count": 2, "length": 30, "time": 2}'
+  
+Random - point cloud - depends on persistence of vision.
+  '{"exec": "random", "count": 1, "length": 30, "time": 2}'
+  '{"exec": "random", "count": 1, "length": 30, "steps": 40, "pause": 0.25}'
+  using pause and time: reduces the number of steps to fit time
+  
+8. HE driver - coding
+   subscribe to homie/<device>/turret_n/pan
+   subscribe to homie/<device>/turret_n/tilt
+   subscribe to homie/<device>/turret_n/power
+   
+9. systemd
+10. Mycroft skill?
+11. Implement HE Strobe, Display, Ranger.

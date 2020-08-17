@@ -20,6 +20,8 @@ import atexit
 
 import RPi.GPIO as GPIO
 from adafruit_servokit import ServoKit
+import math
+import random
 
 settings = None
 hmqtt = None
@@ -35,7 +37,7 @@ def turretCB(idx, jsonstr):
   #tur_lock.acquire()    
   t = turrets[idx]
   #print(t)
-  if jsonstr == 'stop' and t.stopped == False:
+  if jsonstr == 'stop' and t.state == State.running:
     # async kill
     t.stop()
     return
@@ -46,10 +48,10 @@ def turretCB(idx, jsonstr):
     p = int(pwr)
     if p == 0:
       t.laser(False)
-      hmqtt.update_power(p)
+      hmqtt.update_power(p, idx, p)
     elif p == 100:
       t.laser(True)
-      hmqtt.update_power(p)
+      hmqtt.update_power(p, idx, p)
     else:
       applog.warn(f'bad power: {pwr}')
   # build internal args dict with defaults
@@ -65,32 +67,57 @@ def turretCB(idx, jsonstr):
   tilt = args.get('tilt', None)
   pan = args.get('pan', None)
   exe = args.get('exec', None)
-  if pan:
-    t.pan_to(pan, margs)
-  tilt = args.get('tilt', None)
-  if tilt:
-    t.tilt_to(tilt)
-  if exe:
-    cnt = args.get('count', 1)
-    if exe == 1:
-      square_zig(t, cnt, margs)
-    elif exe == 2:
-      circle_zig(t, cnt, margs)
-    elif exe == 3:
-      diamond_zig(t, cnt, margs)
-    elif exe == 4:
-      cross_zig(t, cnt, margs)
-    elif exe == 5:
-      margs['lines'] = args.get('lines', 4)
-      horizontal_zig(t, cnt, margs)
-    elif exe == 6:
-      margs['lines'] = args.get('lines', 4)
-      vertical_zig(t, cnt, margs)
-    elif exe == 7:
-      random_zig(t, cnt, margs)
-    else:
-      app.warn(f'unknown exec pattern: {exec}')
-      
+  viewbx = args.get('begx', None)
+  viewby = args.get('begy', None)
+  viewex = args.get('endx', None)
+  viewey = args.get('endy', None)
+  # set viewport if given and it fits
+  if viewbx is not None and viewbx >= t.dflt_minx and viewbx <= t.dflt_maxx:
+    t.minx = viewbx
+  if viewex is not None and viewex >= t.dflt_minx and viewex <= t.dflt_maxx:
+    t.maxx = viewex
+  if viewby is not None and viewby >= t.dflt_miny and viewby <= t.dlft_maxy:
+    t.miny = viewby
+  if viewey is not None and viewey >= t.dflt_miny and viewby <= t.dlft_maxy:
+    t.maxy = viewey
+  # make sure viewport gets restored
+  try:
+    if pan:
+      t.pan_to(pan, margs)
+    tilt = args.get('tilt', None)
+    if tilt:
+      t.tilt_to(tilt)
+    if exe:  
+      cnt = args.get('count', 1)
+      if exe == 1 or exe == 'square':
+        square_zig(t, cnt, margs)
+      elif exe == 2 or exe == 'circle':
+        margs['radius'] = args.get('radius', 40)
+        circle_zig(t, cnt, margs)
+      elif exe == 3 or exe == 'diamond':
+        margs['length'] = args.get('length', 20)
+        diamond_zig(t, cnt, margs)
+      elif exe == 4 or exe == 'crosshairs':
+        margs['length'] = args.get('length', 20)
+        cross_zig(t, cnt, margs)
+      elif exe == 5 or exe == 'hzig':
+        margs['lines'] = args.get('lines', 4)
+        horizontal_zig(t, cnt, margs)
+      elif exe == 6 or exe == 'vzig':
+        margs['lines'] = args.get('lines', 4)
+        vertical_zig(t, cnt, margs)
+      elif exe == 7 or exe == 'random':
+        margs['length'] = args.get('length', 30)
+        random_zig(t, cnt, margs)
+      else:
+        app.warn(f'unknown exec pattern: {exec}')
+  except:
+    traceback.print_exc()
+  # always restore viewport
+  t.minx = t.dflt_minx
+  t.maxx = t.dflt_maxx
+  t.miny = t.dflt_miny
+  t.maxy = t.dflt_maxy
   hmqtt.update_angles(idx, t.pan_angle, t.tilt_angle)
   hmqtt.update_status(idx, 'OK')
   t.stop()
@@ -128,13 +155,120 @@ def square_zig(t, cnt, opts):
   t.laser(False)
     
 def circle_zig(t, cnt, opts):
-  pass
+  '''
+  Draw a circle given a radius. It will be centered in the turret's
+  'useful' viewport. To reduced physical movement, precompute the moves. 
+  Only save them if they move by one. This also allows us to spread the time evenly.
+  
+  opts are 'radius', 'method', 'increment', 'pause'
+  
+  '''
+  cparts = []
+  cntr = 0
+
+  ctrx = int((t.maxx - t.minx)/2)+t.minx
+  ctry = int((t.maxy - t.miny)/2)+t.miny
+  r = opts.get('radius', 20)
+  if (ctry - r) < t.miny:
+    #print('reducing radius to fit')
+    r = ctry - t.miny
+  #print(f'circle, center = {ctrx},{ctry} r={r}')
+  old_x = 0
+  old_y = 0
+  for a in range(0, 360):
+  #for a in [0,90,180,270,360]:
+    ar = math.radians(a)
+    x = int(ctrx + (math.cos(ar) * r))
+    y = int(ctry + (math.sin(ar) * r))
+    if x != old_x or y != old_y:
+      old_y = y
+      old_x = x
+      cntr += 1
+      cparts.append((x,y))
+      #print(f'{cntr}: ang:{a} => {x},{y}')
+      
+  # deal with the options
+  margs = {}
+  steps = 1
+  if opts['method'] == Move.time:
+    margs['pause'] = opts.get('increment', 1) / cntr
+  if opts['method'] == Move.steps:
+    steps = opts.get('increment', 1)
+  t.laser(True)
+  for c in range(0, cnt):
+    for i in range(0, len(cparts), steps):
+      tpl = cparts[i]
+      t.point_to(tpl[0], tpl[1], margs)
+  t.laser(False)
+  t.point_to(90, 90)
+
   
 def diamond_zig(t, cnt, opts):
-  pass
+  '''
+  Draw a diamond given a length of one side. It will be centered in the turret's
+  'useful' viewport. 
+  
+  opts are 'length', 'method', 'increment', 'pause'. 
+  
+  '''
+  margs = {}
+  length = opts.get('length', 20)
+  margs['method'] = opts['method']
+  if opts['method'] == Move.steps:
+    margs['increment'] = opts.get('increment',1)
+  if opts['method'] == Move.time:
+    margs['increment'] = opts.get('increment', 0.2) / 4
+  margs['pause'] = opts.get('pause',0.2) / 4
+  ctrx = int((t.maxx - t.minx)/2)+t.minx
+  ctry = int((t.maxy - t.miny)/2)+t.miny
+  half = round(length/2)
+  print(f'cross: {ctrx}, {ctry} for {half} by {margs}')
+  t.point_to(ctrx, ctry + half)
+  t.laser(True)
+  for i in range(cnt):
+    t.line_to(ctrx + half, ctry, margs)
+    t.line_to(ctrx, ctry - half, margs)
+    t.line_to(ctrx - half, ctry, margs)
+    t.line_to(ctrx, ctry + half, margs)
+  t.laser(False)
+  t.point_to(90,90)
   
 def cross_zig(t, cnt, opts):
-  pass
+  '''
+  Draw a set of crosshairs given a length. It will be centered in the turret's
+  'useful' viewport. 
+  
+  opts are 'length', 'method', 'increment', 'pause'. 
+  
+  '''
+  margs = {}
+  margs['method'] = opts['method']
+  if opts['method'] == Move.steps:
+    margs['increment'] = opts.get('increment',1)
+  if opts['method'] == Move.time:
+    margs['increment'] = opts.get('increment', 0.2)
+  margs['pause'] = opts.get('pause',0.2) / 2
+  length = opts.get('length', 20)
+  ctrx = int((t.maxx - t.minx)/2)+t.minx
+  ctry = int((t.maxy - t.miny)/2)+t.miny
+  half = round(length/2)
+  #print(f'cross: {ctrx}, {ctry} for {half}')
+  for i in range(cnt):
+    # horizontal line
+    t.laser(False)
+    t.point_to(ctrx - half, ctry)
+    t.laser(True)
+    t.line_to(ctrx + half, ctry, margs)
+    # vertical line
+    t.laser(False)
+    t.point_to(ctrx, ctry + half)
+    t.laser(True)
+    t.line_to(ctrx, ctry - half, margs)
+    t.laser(False)
+    
+  t.point_to(90,90)
+  
+
   
 def horizontal_zig(t, cnt, opts):
   #print(f' inopts: {opts}')
@@ -264,7 +398,53 @@ def vertical_zig(t, cnt, opts):
     
   
 def random_zig(t, cnt, opts):
-  pass
+  '''
+  Draw a randwom point cloud in a box given a length of one side. It will be centered in the turret's
+  'useful' viewport. 
+  
+  opts are 'length', 'method', 'increment', 'pause'. 
+  For Move.steps 'increment' is the number of points (largish number rcmd)
+  For Move.time - the time(sec) is divided by .05 to give the number of points
+  pause is per point so a little number like 0.02 is good. For timed loops
+  pause > 0.02 will reduce the steps to fit the time.
+  
+  '''
+  margs = {}
+  steps = 100
+  pause = 0.0
+  length = opts.get('length', 20)
+  #margs['method'] = opts['method']
+  if opts['method'] == Move.steps:
+    steps = int(opts.get('increment',100))
+    pause = opts.get('pause',0.02)
+  elif opts['method'] == Move.time:
+     pause = pause = opts.get('pause',0.02)
+     steps = int(opts.get('increment', 2) / pause)
+
+  else:
+    pause = opts.get('pause',0.02)
+    steps = 100
+  margs = {'pause': pause}
+  ctrx = int((t.maxx - t.minx)/2)+t.minx
+  ctry = int((t.maxy - t.miny)/2)+t.miny
+  half = round(length/2)
+  # origin (draw viewport)
+  draw_begx = int(((t.maxx - t.minx) - length) / 2) + t.minx
+  draw_begy = int(((t.maxy - t.miny) - length) / 2) + t.miny
+  draw_endx = draw_begx + length
+  draw_endy = draw_begy + length
+  #print(f'inargs {opts}, {margs}')
+  #print(f'random: {draw_begx}, {draw_begy} by {length} for {steps}, {pause}')
+  t.point_to(ctrx, ctry)
+  t.laser(True)
+  for i in range(cnt):
+    for s in range(steps):
+      x = random.randint(draw_begx, draw_endx)
+      y = random.randint(draw_begy, draw_endy)
+      #print(x,y)
+      t.point_to(x, y, margs)
+  t.laser(False)
+  t.line_to(90, 90, margs)
   
 def cleanup():
   global turrets
