@@ -36,24 +36,15 @@ def turretCB(idx, jsonstr):
   global applog, running
   #tur_lock.acquire()    
   t = turrets[idx]
-  #print(t)
-  if jsonstr == 'stop' and t.state == State.running:
-    # async kill
-    t.stop()
+  applog.info(f'command {jsonstr}')
+  if jsonstr == 'stop':
+    if t.state == State.running:
+      # async kill
+      t.cancel()
     return
-  t.begin()
   args = json.loads(jsonstr)
+  applog.info(f'json {args}')
   pwr = args.get('power', None)
-  if pwr:
-    p = int(pwr)
-    if p == 0:
-      t.laser(False)
-      hmqtt.update_power(p, idx, p)
-    elif p == 100:
-      t.laser(True)
-      hmqtt.update_power(p, idx, p)
-    else:
-      applog.warn(f'bad power: {pwr}')
   # build internal args dict with defaults
   margs = {}
   margs['method'] = Move.direct
@@ -82,6 +73,17 @@ def turretCB(idx, jsonstr):
     t.maxy = viewey
   # make sure viewport gets restored
   try:
+    t.begin()
+    if pwr:
+      p = int(pwr)
+      if p == 0:
+        t.laser(False)
+        hmqtt.update_power(p, idx, p)
+      elif p == 100:
+        t.laser(True)
+        hmqtt.update_power(p, idx, p)
+      else:
+        applog.warn(f'bad power: {pwr}')
     if pan:
       t.pan_to(pan, margs)
     tilt = args.get('tilt', None)
