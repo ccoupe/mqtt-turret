@@ -122,6 +122,7 @@ class Homie_MQTT:
     try:
       for i in range(0, len(self.settings.turrets)):
         if topic == self.hcmds_sub[i]:
+          self.log.debug(f'on_message {topic}, {payload} => {i}')
           ctl_thr = Thread(target=self.ctlCb, args=(i, payload))
           ctl_thr.start()
           break
@@ -148,10 +149,9 @@ class Homie_MQTT:
        
   def on_disconnect(self, client, userdata, rc):
     self.mqtt_connected = False
-    log("mqtt reconnecting")
+    self.log.info("mqtt reconnecting")
     self.client.reconnect()
       
-    self.hpower_pub = "homie/"+hdevice+"/turret_1/power"
   def update_pan(self, idx, angle):
     self.client.publish(self.hpans_pub[idx], ang)
     
@@ -163,7 +163,10 @@ class Homie_MQTT:
     self.client.publish(self.htilts_pub[idx], tilt)
 
   def update_power(self, idx, power):
-    self.client.publish(self.hpower_pubs[idx], power)
+    topic = self.hpowers_pub[idx]
+    self.client.publish(topic, power)
     
   def update_status(self, idx, sts):
     self.client.publish(self.hcmds_pub[idx], sts)
+
+

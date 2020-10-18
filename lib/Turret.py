@@ -11,6 +11,7 @@ import RPi.GPIO as GPIO
 from adafruit_servokit import ServoKit
 import time
 import enum 
+#from threading import Lock, Thread
 
 class State(enum.Enum): 
   stopped = 0
@@ -27,6 +28,7 @@ class Turret:
   def __init__(self, dic, kit, log):
     self.log = log
     self.kit = kit
+    #self.lock = Lock()
     self.pca = dic['hw']
     self.laserp = dic['laser_pin']
     self.panp = dic['pan_pin']    # or PCA9685 channel num
@@ -348,6 +350,7 @@ if __name__ == '__main__':
   t.begin()
   t.pan_to(90)
   t.tilt_to(90)
+  t.laser(True);
   while True:
     ap = 0
     at = 0
@@ -376,4 +379,5 @@ if __name__ == '__main__':
       t.stop()
 
   t.stop()
+  t.laser(False)
   GPIO.cleanup()

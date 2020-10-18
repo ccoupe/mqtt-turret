@@ -28,19 +28,31 @@ hmqtt = None
 debug_level = 1
 applog = None
 turrets = []    # list of Turret Objects
-#tur_lock =  Lock()
+tur_locks =  []
 running = False
 
 # MQTT callback, Mult-Threaded re-entrant
 def turretCB(idx, jsonstr):
-  global applog, running
-  #tur_lock.acquire()    
+  global applog, running, turrets, tur_locks, hmqtt
   t = turrets[idx]
+  #applog.info(f'locking turret {idx} {t}')
+  #tur_locks[idx].aquire()
   applog.info(f'command {jsonstr}')
   if jsonstr == 'stop':
     if t.state == State.running:
       # async kill
       t.cancel()
+    return
+  elif jsonstr == 'manual':
+    t1 = {'min_x': turrets[0].minx, 'max_x': turrets[0].maxx,
+      'min_y': turrets[0].miny, 'max_y' : turrets[0].maxy}
+    dt = [t1]
+    if len(turrets) > 1: 
+      t2 = {'min_x': turrets[1].minx, 'max_x': turrets[1].maxx,
+        'min_y': turrets[1].miny, 'max_y': turrets[1].maxy}
+      dt.append(t2)
+    jstr = {'bounds': dt}
+    hmqtt.update_status(idx, json.dumps(jstr))
     return
   args = json.loads(jsonstr)
   applog.info(f'json {args}')
@@ -74,21 +86,22 @@ def turretCB(idx, jsonstr):
   # make sure viewport gets restored
   try:
     t.begin()
-    if pwr:
+    if pwr is not None:
       p = int(pwr)
       if p == 0:
         t.laser(False)
-        hmqtt.update_power(p, idx, p)
+        hmqtt.update_power(idx, p)
       elif p == 100:
         t.laser(True)
-        hmqtt.update_power(p, idx, p)
+        hmqtt.update_power(idx, p)
       else:
         applog.warn(f'bad power: {pwr}')
-    if pan:
+    if pan is not None:
       t.pan_to(pan, margs)
-    tilt = args.get('tilt', None)
-    if tilt:
-      t.tilt_to(tilt)
+      applog.info(f'pan_to: {pan}')
+    if tilt is not None:
+      t.tilt_to(tilt, margs)
+      applog.info(f'tilt_to: {tilt}')
     if exe:  
       cnt = args.get('count', 1)
       if exe == 1 or exe == 'square':
@@ -112,7 +125,7 @@ def turretCB(idx, jsonstr):
         margs['length'] = args.get('length', 30)
         random_zig(t, cnt, margs)
       else:
-        app.warn(f'unknown exec pattern: {exec}')
+        applog.warn(f'unknown exec pattern: {exec}')
   except:
     traceback.print_exc()
   # always restore viewport
@@ -122,8 +135,11 @@ def turretCB(idx, jsonstr):
   t.maxy = t.dflt_maxy
   hmqtt.update_angles(idx, t.pan_angle, t.tilt_angle)
   hmqtt.update_status(idx, 'OK')
-  t.stop()
-  #tur_lock.release()
+  if exe:
+    t.stop()
+  #applog.debug(f'unlocking {idx}')
+  #tur_locks[idx].release()
+
   
 def square_zig(t, cnt, opts):
   print(opts)
@@ -455,7 +471,7 @@ def cleanup():
   GPIO.cleanup()
     
 def main():
-  global settings, hmqtt, applog, turrets
+  global settings, hmqtt, applog, turrets, tur_locks
   # process cmdline arguments
   loglevels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
   ap = argparse.ArgumentParser()
@@ -500,10 +516,8 @@ def main():
   
   for i in range(0, len(settings.turrets)):
      turrets.append(Turret(settings.turrets[i], kit, applog))
-   
-  #hmqtt = Homie_MQTT(settings, 
-  #                  turretCB)
-                    
+     tur_locks.append(Lock())
+                       
   settings.print()
   
   # fix debug levels
