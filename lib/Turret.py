@@ -34,6 +34,7 @@ class Turret:
     self.panp = dic['pan_pin']    # or PCA9685 channel num
     self.tiltp = dic['tilt_pin']  # or PCA9685 channel num
     self.dfltp = dic.get('delay',0.25)
+    self.tpos = dic.get('position', 'br') # turret position in room.
     # max and min depend on individual servos, mounting scheme and where the
     # thing is deployed.  These defaults work for mine.
     self.minx = dic.get('pan_min', 30)
@@ -46,6 +47,11 @@ class Turret:
     self.dflt_maxx = self.maxx
     self.dflt_maxy = self.maxy
     self.dflt_miny = self.miny
+    # This is the turrents field of view of the target area.
+    self.max_tx = dic.get('pant_max', self.maxx)
+    self.min_tx = dic.get('pant_min', self.minx)
+    self.min_ty = dic.get('tiltt_min', self.miny)
+    self.max_ty = dic.get('tiltt_max', self.maxy)
     self.pan_angle = 0
     self.tilt_angle = 0
     self.power = False

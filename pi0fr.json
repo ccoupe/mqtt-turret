@@ -6,15 +6,20 @@
   "homie_name": "Pi 0w Front Laser Turrets",
   "turrets": [
     {
+	"position": "fc",
         "hw": true,
         "laser_pin" : 17,
         "pan_pin": 0,
         "tilt_pin": 1,
 	"delay": 0.25,
-	"pan_min": 80,
+	"pan_min": 45,
 	"pan_max": 140,
-	"tilt_min": 90,
-	"tilt_max": 140
+	"tilt_min": 70,
+	"tilt_max": 120,
+	"pant_min": 51,
+	"pant_max": 150,
+	"tiltt_min": 70,
+	"tiltt_max": 120
     }
   ]
 }

@@ -55,6 +55,10 @@ def turretCB(idx, jsonstr):
     hmqtt.update_status(idx, json.dumps(jstr))
     return
   args = json.loads(jsonstr)
+  trk = args.get('cmd', None)
+  if trk:
+    tracker(t, args)
+    return
   applog.info(f'json {args}')
   pwr = args.get('power', None)
   # build internal args dict with defaults
@@ -531,6 +535,53 @@ def main():
   # and let the threads work.
   while True:
     time.sleep(5 * 60)
+    
+def tracker(tur, args):
+  global applog
+  # tur is Turret Object.
+  # image 0,0 is Top,Left. Incrment y to move down
+  applog.info(f'tracker {args}')
+  x = args['x']
+  y = args['y']
+  ex = args['ex']
+  ey = args['ey']
+  wid = ex - x
+  hgt = ey - y
+  area = wid * hgt
+  fw = 640
+  fh = 480
+  tgt_ctr_x = (wid / 2) + x
+  tgt_ctr_y = (hgt / 2) + y
+  # target is % of camera range
+  cam_px = tgt_ctr_x / fw
+  cam_py = tgt_ctr_y / fh
+  msg = f'area: {area} ctr_x: {tgt_ctr_x} {cam_px}% ctr_y: {tgt_ctr_y} {cam_py}%'
+  # That's the view from the camera - now compute angles from the turrets
+  # point of view.
+  if tur.tpos == 'fc':
+    # mirror view, left is right
+    nx = tur.max_tx - (cam_px * (tur.max_tx - tur.min_tx))
+    tur.pan_to(nx)
+    # vertical (tilt) goal:  aim for 4 ft height 
+    # Guess: if distance > 3 meter, drop a degree or 5?
+    ny = tur.max_ty - (cam_py * (tur.max_ty - tur.min_ty))
+    if hgt < 240:
+      ny -= 3
+    tur.tilt_to(ny)
+    applog.info(f'shoot_at {nx},{ny} using {msg}')
+  elif tur.tpos == 'br':
+    nx = tur.min_tx + (cam_px * (tur.max_tx - tur.min_tx))
+    tur.pan_to(nx)
+    # my 'bc' turret is two feet high. Needs some +angle to get to 4ft
+    # Big image is far way from turret
+    ny = ny = tur.max_ty - (cam_py * (tur.max_ty - tur.min_ty))
+    if hgt > 240:
+      ny -= 3
+    tur.tilt_to(ny)
+    
+  tur.laser(True)
+
+
          
 if __name__ == '__main__':
   sys.exit(main())
