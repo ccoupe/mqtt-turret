@@ -1,3 +1,3 @@
 #!/bin/bash
-cd /home/pi/Projects/iot/turret
-/usr/bin/python3 turrets.py -s -c noir.json
+cd /usr/local/lib/mqttlaser
+/usr/bin/python3 turrets.py -s -c pi0fr.json

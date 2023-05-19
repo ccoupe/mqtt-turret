@@ -1,5 +1,5 @@
 {
-  "mqtt_server_ip": "192.168.1.7",
+  "mqtt_server_ip": "stoic.local",
   "mqtt_port": 1883,
   "mqtt_client_name": "turret_front",
   "homie_device": "turret_front",

@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/home/pi/Projects/iot/turret/mqttlasers.sh
+ExecStart=/usr/local/lib/mqttlaser/mqttlasers.sh
 Restart=on-abort
 
 [Install]
